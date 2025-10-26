@@ -52,7 +52,7 @@ Open `delete_nsfw_reddit.py` and replace the placeholder values:
 reddit = praw.Reddit(
     client_id="YOUR_CLIENT_ID",
     client_secret="YOUR_CLIENT_SECRET",
-    user_agent="DeleteNSFWScript by u/YOUR_USERNAME",
+    user_agent="Reddit-NSFW-Cleaner by u/awowwowa",
     username="YOUR_USERNAME",
     password="YOUR_PASSWORD"
 )
