@@ -4,13 +4,13 @@
 [![License](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#)
 
-> A cross-platform Python tool that deletes all **NSFW saved** and/or **upvoted posts** from your Reddit account safely — with logging, progress tracking, and retry protection.
+> A cross-platform Python tool that deletes all **NSFW saved** and/or **upvoted & downvoted posts** from your Reddit account safely — with logging, progress tracking, and retry protection.
 
 ---
 
 ## 🚀 Features
 
-- ✅ **Deletes saved and upvoted NSFW posts**
+- ✅ **Deletes saved, upvoted, and downvoted NSFW posts**
 - ⚙️ **Cross-platform** — works on Windows, macOS, and Linux  
 - 🧠 **Timeout system** using threads (no freezing on stuck posts)  
 - 💬 **Interactive** — asks before retrying failed deletions  
@@ -71,7 +71,8 @@ Then choose your action:
 ```
 1. Delete saved NSFW posts
 2. Remove upvotes from NSFW posts
-3. Do both
+3. Remove downvotes from NSFW posts
+4. Do all three
 ```
 
 ---
@@ -102,9 +103,9 @@ By using or modifying this software, you agree to:
 Created by **Aidan Garcia**  
 A free and privacy-respecting cleanup tool for Reddit users.  
 
-Special thanks to ChatGPT for saving a million headaches along the way
+Special thanks to ChatGPT for saving a million headaches along the way.
 
 If you find this useful, consider giving the repo a ⭐ on GitHub!
 
-## FYI
-The reddit api can be quirky at best and after adding measures to counter this, if you have approx. over 200+ posts saved/upvoted, it might miss those even after multiple runs. If that's the case, rerun the script until it returns 0 posts found.
+## ⚠️ FYI
+The reddit API can be quirky at best and even after adding measures to counter this, if you have approx. over 200+ posts saved/upvoted, there still might be a chance where it'll miss those. If that's the case, rerun the script until it returns 0 posts found.
