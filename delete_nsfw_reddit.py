@@ -1,5 +1,5 @@
 """
-Reddit NSFW Full Cleaner
+Reddit NSFW Full Cleaner v1.3
 ------------------------
 Deletes all NSFW saved and upvoted posts/comments from your Reddit account.
 Automatically repeats until nothing NSFW remains.
@@ -14,6 +14,14 @@ import threading
 import time
 import sys
 from tqdm import tqdm
+
+# Replacing unicode symbols for Windows compatibility
+OK = "[OK]"
+WARN = "[WARN]"
+SKIP = "[SKIP]"
+DONE = "[DONE]"
+ERR = "[ERR]"
+ARROW = "->"
 
 # Optional colors
 try:
@@ -54,11 +62,28 @@ def run_with_timeout(func, timeout, *args, **kwargs):
     thread.join(timeout)
 
     if thread.is_alive():
-        tqdm.write(Fore.YELLOW + "⚠️ Operation timed out, skipping..." + Style.RESET_ALL)
+        tqdm.write(Fore.YELLOW + "{WARN} Operation timed out, skipping..." + Style.RESET_ALL)
         return False
     if exception[0]:
         raise exception[0]
     return True
+    
+def is_unmodifiable(item):
+    """Return True if the Reddit post/comment can't be changed (e.g., archived)."""
+    if isinstance(item, praw.models.Submission) and getattr(item, "archived", False):
+        return True
+    return False
+
+def is_unfixable_error(e):
+    """Return True if the error means the post can't be modified."""
+    msg = str(e).lower()
+    return (
+        "400" in msg
+        or "bad request" in msg
+        or "archived" in msg
+        or "not found" in msg
+        or "forbidden" in msg
+    )
 
 # ------------------------------------------------------------
 def connect_to_reddit():
@@ -67,14 +92,14 @@ def connect_to_reddit():
         reddit = praw.Reddit(
             client_id="YOUR_CLIENT_ID",
             client_secret="YOUR_CLIENT_SECRET",
-            user_agent="Reddit NSFW Cleaner by u/awowwowa",
+            user_agent="Reddit NSFW Cleaner v1.3 by u/awowwowa",
             username="YOUR_USERNAME",
             password="YOUR_PASSWORD"
         )
-        print(Fore.GREEN + f"✅ Connected as: {reddit.user.me()}" + Style.RESET_ALL)
+        print(Fore.GREEN + f"{OK} Connected as: {reddit.user.me()}" + Style.RESET_ALL)
         return reddit
     except Exception as e:
-        print(Fore.RED + f"❌ Connection failed: {e}" + Style.RESET_ALL)
+        print(Fore.RED + f"{ERR} Connection failed: {e}" + Style.RESET_ALL)
         log_error(traceback.format_exc())
         retry = input(Fore.YELLOW + "Retry connection? (y/n): ").strip().lower()
         if retry == "y":
@@ -85,8 +110,6 @@ def connect_to_reddit():
 # ------------------------------------------------------------
 def cleanup_saved(reddit):
     total_deleted = 0
-    total_skipped = 0
-
     while True:
         saved = list(reddit.user.me().saved(limit=None))
         nsfw_items = [p for p in saved if getattr(p, "over_18", False)]
@@ -98,40 +121,41 @@ def cleanup_saved(reddit):
 
         for item in tqdm(nsfw_items, desc="Saved NSFW posts", unit="post"):
             try:
-                if isinstance(item, praw.models.Submission):
-                    success = run_with_timeout(item.unsave, TIMEOUT_SECONDS)
-                elif isinstance(item, praw.models.Comment):
-                    success = run_with_timeout(item.unsave, TIMEOUT_SECONDS)
-                else:
+                if is_unmodifiable(item):
+                    tqdm.write(Fore.YELLOW + f"{SKIP} Skipping archived post: {getattr(item, 'title', '[no title]')}" + Style.RESET_ALL)
                     continue
 
-                if success:
-                    total_deleted += 1
-                else:
-                    skipped_posts.append(item)
-            except Exception as e:
-                tqdm.write(Fore.RED + f"Error deleting saved: {e}" + Style.RESET_ALL)
-                log_error(traceback.format_exc())
-                skipped_posts.append(item)
-
-        if skipped_posts:
-            tqdm.write(Fore.YELLOW + f"Retrying {len(skipped_posts)} skipped saved posts..." + Style.RESET_ALL)
-            for item in skipped_posts[:]:
-                try:
+                
+                if isinstance(item, (praw.models.Submission, praw.models.Comment)):
                     success = run_with_timeout(item.unsave, TIMEOUT_SECONDS)
                     if success:
                         total_deleted += 1
-                        skipped_posts.remove(item)
-                except Exception as e:
+                else:
+                    skipped_posts.append(item)
+                            
+                            
+            except Exception as e:
+                if is_unfixable_error(e):
+                    tqdm.write(Fore.YELLOW + f"{WARN} Skipping unmodifiable post: {getattr(item, 'title', '[no title]')}" + Style.RESET_ALL)
+                    log_error(f"Unmodifiable: {getattr(item, 'title', '[no title]')} -> {e}")
+                    continue
+                else:
+                    tqdm.write(Fore.RED + f"Error deleting saved: {e}" + Style.RESET_ALL)
                     log_error(traceback.format_exc())
+                    skipped_posts.append(item)
 
-    print(Fore.GREEN + f"\n✅ Deleted {total_deleted} NSFW saved posts/comments.\n" + Style.RESET_ALL)
+        if not skipped_posts:
+            break
+            
+            
+            tqdm.write(Fore.YELLOW + f"Retrying {len(skipped_posts)} skipped saved posts..." + Style.RESET_ALL)
+            
+
+    print(Fore.GREEN + f"\n{OK} Deleted {total_deleted} NSFW saved posts/comments.\n" + Style.RESET_ALL)
 
 # ------------------------------------------------------------
 def cleanup_upvoted(reddit):
     total_deleted = 0
-    total_skipped = 0
-
     while True:
         upvoted = list(reddit.user.me().upvoted(limit=None))
         nsfw_items = [p for p in upvoted if getattr(p, "over_18", False)]
@@ -143,34 +167,34 @@ def cleanup_upvoted(reddit):
 
         for item in tqdm(nsfw_items, desc="Upvoted NSFW posts", unit="post"):
             try:
-                if isinstance(item, praw.models.Submission):
-                    success = run_with_timeout(item.clear_vote, TIMEOUT_SECONDS)
-                elif isinstance(item, praw.models.Comment):
-                    success = run_with_timeout(item.clear_vote, TIMEOUT_SECONDS)
-                else:
+                if is_unmodifiable(item):
+                    tqdm.write(Fore.YELLOW + f"{SKIP} Skipping archived post: {getattr(item,'title', '[no title]')}" + Style.RESET_ALL)
                     continue
 
-                if success:
-                    total_deleted += 1
-                else:
-                    skipped_posts.append(item)
-            except Exception as e:
-                tqdm.write(Fore.RED + f"Error clearing upvote: {e}" + Style.RESET_ALL)
-                log_error(traceback.format_exc())
-                skipped_posts.append(item)
-
-        if skipped_posts:
-            tqdm.write(Fore.YELLOW + f"Retrying {len(skipped_posts)} skipped upvoted posts..." + Style.RESET_ALL)
-            for item in skipped_posts[:]:
-                try:
+                if isinstance(item, (praw.models.Submission, praw.models.Comment)):
                     success = run_with_timeout(item.clear_vote, TIMEOUT_SECONDS)
                     if success:
                         total_deleted += 1
-                        skipped_posts.remove(item)
-                except Exception as e:
+                    else:
+                        skipped_posts.append(item)
+                        
+            except Exception as e:
+                if is_unfixable_error(e):
+                    tqdm.write(Fore.YELLOW + f"{WARN} Skipping unmodifiable post: {getattr(item, 'title', '[no title]')}" + Style.RESET_ALL)
+                    log_error(f"Unmodifiable: {getattr(item, 'title', '[no title]')} -> {e}")
+                    continue
+                else:
+                    tqdm.write(Fore.RED + f"Error clearing upvote: {e}" + Style.RESET_ALL)
                     log_error(traceback.format_exc())
+                    skipped_posts.append(item)
 
-    print(Fore.GREEN + f"\n✅ Cleared upvotes from {total_deleted} NSFW posts/comments.\n" + Style.RESET_ALL)
+        if not skipped_posts:
+            break
+            
+            
+            tqdm.write(Fore.YELLOW + f"Retrying {len(skipped_posts)} skipped upvoted posts..." + Style.RESET_ALL)
+
+    print(Fore.GREEN + f"\n{OK} Cleared upvotes from {total_deleted} NSFW posts/comments.\n" + Style.RESET_ALL)
 
 # ------------------------------------------------------------
 def cleanup_downvoted(reddit):
@@ -187,34 +211,40 @@ def cleanup_downvoted(reddit):
 
         for item in tqdm(nsfw_items, desc="Downvoted NSFW posts", unit="post"):
             try:
+                if is_unmodifiable(item):
+                    tqdm.write(Fore.YELLOW + f"{SKIP} Skipping archived post: {getattr(item, 'title', '[no title]')}" + Style.RESET_ALL)
+                    continue
+
+                
                 if isinstance(item, (praw.models.Submission, praw.models.Comment)):
                     success = run_with_timeout(item.clear_vote, TIMEOUT_SECONDS)
                     if success:
                         total_deleted += 1
                     else:
                         skipped_posts.append(item)
+            
             except Exception as e:
-                tqdm.write(Fore.RED + f"Error clearing downvote: {e}" + Style.RESET_ALL)
-                log_error(traceback.format_exc())
-                skipped_posts.append(item)
-
-        # Retry skipped posts once
-        if skipped_posts:
-            tqdm.write(Fore.YELLOW + f"Retrying {len(skipped_posts)} skipped downvoted posts..." + Style.RESET_ALL)
-            for item in skipped_posts[:]:
-                try:
-                    success = run_with_timeout(item.clear_vote, TIMEOUT_SECONDS)
-                    if success:
-                        total_deleted += 1
-                        skipped_posts.remove(item)
-                except Exception as e:
+                if is_unfixable_error(e):
+                    tqdm.write(Fore.YELLOW + f"{WARN} Skipping unmodifiable post: {getattr(item, 'title', '[no title]')}" + Style.RESET_ALL)
+                    log_error(f"Unmodifiable: {getattr(item, 'title', '[no title]')} -> {e}")
+                    continue  
+                else:
+                    tqdm.write(Fore.RED + f"Error clearing downvote: {e}" + Style.RESET_ALL)
                     log_error(traceback.format_exc())
+                    skipped_posts.append(item)
 
-    print(Fore.GREEN + f"\n✅ Cleared downvotes from {total_deleted} NSFW posts/comments.\n" + Style.RESET_ALL)
+        if not skipped_posts:
+            break
+            
+            
+        tqdm.write(Fore.YELLOW + f"Retrying {len(skipped_posts)} skipped downvoted posts..." + Style.RESET_ALL)
+            
+
+    print(Fore.GREEN + f"\n{OK} Cleared downvotes from {total_deleted} NSFW posts/comments.\n" + Style.RESET_ALL)
     
 # ------------------------------------------------------------
 if __name__ == "__main__":
-    VERSION = "v1.2"
+    VERSION = "v1.3"
     print(Fore.MAGENTA + f"=== Reddit NSFW Full Cleaner {VERSION} ===\n" + Style.RESET_ALL)
     reddit = connect_to_reddit()
 
@@ -235,5 +265,5 @@ if choice in ["2", "4"]:
 if choice in ["3", "4"]:
     cleanup_downvoted(reddit)
 
-    print(Fore.MAGENTA + "\n🎉 All done! Check cleanup_log.txt for errors if any.\n" + Style.RESET_ALL)
+    print(Fore.MAGENTA + "\n[DONE] All done! Check cleanup_log.txt for errors if any.\n" + Style.RESET_ALL)
     input("Press Enter to exit...")
