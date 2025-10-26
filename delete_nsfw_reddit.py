@@ -173,24 +173,67 @@ def cleanup_upvoted(reddit):
     print(Fore.GREEN + f"\n✅ Cleared upvotes from {total_deleted} NSFW posts/comments.\n" + Style.RESET_ALL)
 
 # ------------------------------------------------------------
+def cleanup_downvoted(reddit):
+    total_deleted = 0
+
+    while True:
+        downvoted = list(reddit.user.me().downvoted(limit=None))
+        nsfw_items = [p for p in downvoted if getattr(p, "over_18", False)]
+
+        if not nsfw_items:
+            break
+
+        skipped_posts = []
+
+        for item in tqdm(nsfw_items, desc="Downvoted NSFW posts", unit="post"):
+            try:
+                if isinstance(item, (praw.models.Submission, praw.models.Comment)):
+                    success = run_with_timeout(item.clear_vote, TIMEOUT_SECONDS)
+                    if success:
+                        total_deleted += 1
+                    else:
+                        skipped_posts.append(item)
+            except Exception as e:
+                tqdm.write(Fore.RED + f"Error clearing downvote: {e}" + Style.RESET_ALL)
+                log_error(traceback.format_exc())
+                skipped_posts.append(item)
+
+        # Retry skipped posts once
+        if skipped_posts:
+            tqdm.write(Fore.YELLOW + f"Retrying {len(skipped_posts)} skipped downvoted posts..." + Style.RESET_ALL)
+            for item in skipped_posts[:]:
+                try:
+                    success = run_with_timeout(item.clear_vote, TIMEOUT_SECONDS)
+                    if success:
+                        total_deleted += 1
+                        skipped_posts.remove(item)
+                except Exception as e:
+                    log_error(traceback.format_exc())
+
+    print(Fore.GREEN + f"\n✅ Cleared downvotes from {total_deleted} NSFW posts/comments.\n" + Style.RESET_ALL)
+    
+# ------------------------------------------------------------
 if __name__ == "__main__":
-    VERSION = "v1.1"
+    VERSION = "v1.2"
     print(Fore.MAGENTA + f"=== Reddit NSFW Full Cleaner {VERSION} ===\n" + Style.RESET_ALL)
     reddit = connect_to_reddit()
 
     choice = input(
-        Fore.CYAN +
-        "Select action:\n"
-        "1. Delete saved NSFW posts/comments\n"
-        "2. Remove upvotes from NSFW posts/comments\n"
-        "3. Do both\n"
-        "Choice: " + Style.RESET_ALL
-    ).strip()
+    Fore.CYAN +
+    "Select action:\n"
+    "1. Delete saved NSFW posts/comments\n"
+    "2. Remove upvotes from NSFW posts/comments\n"
+    "3. Remove downvotes from NSFW posts/comments\n"
+    "4. Do all three\n"
+    "Choice: " + Style.RESET_ALL
+).strip()
 
-    if choice in ["1", "3"]:
-        cleanup_saved(reddit)
-    if choice in ["2", "3"]:
-        cleanup_upvoted(reddit)
+if choice in ["1", "4"]:
+    cleanup_saved(reddit)
+if choice in ["2", "4"]:
+    cleanup_upvoted(reddit)
+if choice in ["3", "4"]:
+    cleanup_downvoted(reddit)
 
     print(Fore.MAGENTA + "\n🎉 All done! Check cleanup_log.txt for errors if any.\n" + Style.RESET_ALL)
     input("Press Enter to exit...")
