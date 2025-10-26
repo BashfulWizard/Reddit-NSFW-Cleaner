@@ -105,3 +105,6 @@ A free and privacy-respecting cleanup tool for Reddit users.
 Special thanks to ChatGPT for saving a million headaches along the way
 
 If you find this useful, consider giving the repo a ⭐ on GitHub!
+
+## FYI
+The reddit api can be quirky at best and after adding measures to counter this, if you have approx. over 200+ posts saved/upvoted, it might miss those even after multiple runs. If that's the case, rerun the script until it returns 0 posts found.
