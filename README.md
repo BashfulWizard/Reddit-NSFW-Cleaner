@@ -24,7 +24,7 @@
 
 1. **Clone or download** this repository:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/reddit-nsfw-cleaner.git
+   git clone https://github.com/BashfulWizard/reddit-nsfw-cleaner.git
    cd reddit-nsfw-cleaner
    ```
 
