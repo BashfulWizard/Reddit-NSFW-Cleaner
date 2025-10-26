@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+cleanup_log.txt
+
+# Environment variables
+.env
+
+# IDE / OS files
+.vscode/
+.DS_Store
+Thumbs.db
